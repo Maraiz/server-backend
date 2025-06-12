@@ -62,7 +62,7 @@ app.use(express.urlencoded({
 }));
 
 // Static files
-app.use('/uploads', express.static('uploads'));
+// app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use(router);
