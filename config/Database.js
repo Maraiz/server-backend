@@ -1,43 +1,109 @@
 import { Sequelize } from "sequelize";
 import dotenv from 'dotenv';
 
-// Load environment variables di Database.js juga
+// Load environment variables
 dotenv.config();
 
-// Debug environment variables (setelah dotenv load)
-console.log('🔧 Database.js - Environment Check:');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-console.log('DATABASE_URL preview:', process.env.DATABASE_URL?.substring(0, 30) + '...');
-
+// Hanya log di development, tidak di production
+const isDev = process.env.NODE_ENV !== 'production';
 const isProduction = process.env.NODE_ENV === 'production';
 const useRailway = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway');
 
-console.log('Using production config:', isProduction);
-console.log('Use Railway database:', useRailway);
+if (isDev) {
+    console.log('🔧 Database.js - Environment Check:');
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.log('Use Railway database:', useRailway);
+}
 
 let db;
 
-if (useRailway) {
-    // RAILWAY: MySQL (baik development maupun production)
-    console.log('🚀 Connecting to Railway database...');
+if (useRailway || process.env.DATABASE_URL) {
+    // RAILWAY/PRODUCTION: MySQL
+    if (isDev) console.log('🚀 Connecting to Railway database...');
+    
     db = new Sequelize(process.env.DATABASE_URL, {
         dialect: 'mysql',
         dialectOptions: {
             ssl: {
                 require: true,
                 rejectUnauthorized: false
-            }
+            },
+            // MySQL2 valid options only
+            connectTimeout: 60000,
         },
-        logging: false
+        pool: {
+            // Optimized untuk serverless environment
+            max: 2,          // Maksimal 2 connections
+            min: 0,          // Minimal 0 connections 
+            acquire: 30000,  // 30 detik timeout untuk acquire connection
+            idle: 10000,     // 10 detik sebelum connection di-release
+            evict: 15000,    // 15 detik eviction timeout
+            handleDisconnects: true
+        },
+        logging: isDev ? console.log : false,
+        // Tambahan options untuk serverless
+        retry: {
+            match: [
+                /ConnectionError/,
+                /ConnectionRefusedError/,
+                /ConnectionTimedOutError/,
+                /TimeoutError/,
+                /SequelizeConnectionError/,
+                /SequelizeConnectionRefusedError/,
+                /SequelizeHostNotFoundError/,
+                /SequelizeHostNotReachableError/,
+                /SequelizeInvalidConnectionError/,
+                /SequelizeConnectionTimedOutError/
+            ],
+            max: 3
+        },
+        define: {
+            timestamps: true,
+            freezeTableName: true
+        }
     });
 } else {
     // LOCAL: XAMPP
-    console.log('🏠 Connecting to local XAMPP database...');
+    if (isDev) console.log('🏠 Connecting to local XAMPP database...');
+    
     db = new Sequelize('capstone_projects', 'root', '', {
         host: 'localhost',
-        dialect: 'mysql'
+        dialect: 'mysql',
+        pool: {
+            max: 5,
+            min: 0,
+            acquire: 30000,
+            idle: 10000
+        },
+        logging: isDev ? console.log : false,
+        define: {
+            timestamps: true,
+            freezeTableName: true
+        }
     });
 }
+
+// Connection test function (opsional, untuk debugging)
+export const testConnection = async () => {
+    try {
+        await db.authenticate();
+        if (isDev) console.log('✅ Database connection established successfully.');
+        return true;
+    } catch (error) {
+        console.error('❌ Unable to connect to the database:', error.message);
+        return false;
+    }
+};
+
+// Graceful shutdown function
+export const closeConnection = async () => {
+    try {
+        await db.close();
+        if (isDev) console.log('🔌 Database connection closed.');
+    } catch (error) {
+        console.error('❌ Error closing database connection:', error.message);
+    }
+};
 
 export default db;

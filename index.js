@@ -9,6 +9,7 @@ import serverless from 'serverless-http';
 // Load environment variables
 dotenv.config();
 
+console.log('🚀 Starting Express app...');
 const app = express();
 
 // === ENVIRONMENT DEBUG ===
@@ -20,22 +21,13 @@ console.log('ACCESS_TOKEN_SECRET exists:', !!process.env.ACCESS_TOKEN_SECRET);
 console.log('REFRESH_TOKEN_SECRET exists:', !!process.env.REFRESH_TOKEN_SECRET);
 console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 
-const relevantEnvVars = Object.keys(process.env).filter(key =>
-  key.includes('TOKEN') ||
-  key.includes('DATABASE') ||
-  key.includes('NODE_ENV') ||
-  key.includes('FRONTEND')
-);
-console.log('All relevant env vars found:', relevantEnvVars);
-console.log('=====================================');
-
-// Database connection with timeout
+// Database connection function (tidak dipanggil di startup)
 async function connectDatabase() {
   console.log('Attempting database connection...');
 
   try {
     const connectionTimeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database connection timeout (15s)')), 15000)
+      setTimeout(() => reject(new Error('Database connection timeout (10s)')), 10000)
     );
 
     const dbConnection = db.authenticate();
@@ -45,17 +37,9 @@ async function connectDatabase() {
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-
-    if (error.message.includes('timeout') || error.message.includes('ECONNREFUSED')) {
-      console.log('⚠️  Railway connection failed, you can try switching to local XAMPP');
-      console.log('⚠️  Comment DATABASE_URL in .env to use local database');
-    }
-
     return false;
   }
 }
-
-const dbConnected = await connectDatabase();
 
 // Middlewares
 app.use(cors({
@@ -83,13 +67,23 @@ app.use('/uploads', express.static('uploads'));
 // Routes
 app.use(router);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    database: dbConnected ? 'Connected' : 'Disconnected'
-  });
+// Health check dengan lazy database connection
+app.get('/health', async (req, res) => {
+  try {
+    const dbConnected = await connectDatabase();
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      database: dbConnected ? 'Connected' : 'Disconnected'
+    });
+  } catch (error) {
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      database: 'Error',
+      error: error.message
+    });
+  }
 });
 
 // DB check
@@ -102,5 +96,43 @@ app.get('/db-status', async (req, res) => {
   }
 });
 
-// ✅ Penting: Export app untuk Vercel
-export const handler = serverless(app);
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    message: 'Endpoint not found',
+    path: req.path
+  });
+});
+
+// ✅ Export untuk Vercel
+export default serverless(app);
+
+// ✅ Juga export app untuk development
+export { app };
+
+// 🚀 Development server startup
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📍 Health check: http://localhost:${PORT}/health`);
+    console.log(`📊 DB status: http://localhost:${PORT}/db-status`);
+  });
+}
