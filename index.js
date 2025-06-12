@@ -4,6 +4,7 @@ import db from './config/Database.js';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import router from './routes/index.js';
+import serverless from 'serverless-http';
 
 // Load environment variables
 dotenv.config();
@@ -102,4 +103,4 @@ app.get('/db-status', async (req, res) => {
 });
 
 // ✅ Penting: Export app untuk Vercel
-export default app;
+export const handler = serverless(app);
