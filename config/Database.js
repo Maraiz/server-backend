@@ -1,9 +1,5 @@
-try {
-  require('mysql2');
-  console.log('✅ mysql2 is available');
-} catch (e) {
-  console.error('❌ mysql2 not found:', e.message);
-}
+import 'mysql2';
+console.log('✅ mysql2 is available');
 
 import { Sequelize } from "sequelize";
 import dotenv from 'dotenv';

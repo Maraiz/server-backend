@@ -1,5 +1,5 @@
 import Users from '../models/userModel.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
 
