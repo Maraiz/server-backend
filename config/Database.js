@@ -29,20 +29,17 @@ if (useRailway || process.env.DATABASE_URL) {
                 require: true,
                 rejectUnauthorized: false
             },
-            // MySQL2 valid options only
             connectTimeout: 60000,
         },
         pool: {
-            // Optimized untuk serverless environment
-            max: 2,          // Maksimal 2 connections
-            min: 0,          // Minimal 0 connections 
-            acquire: 30000,  // 30 detik timeout untuk acquire connection
-            idle: 10000,     // 10 detik sebelum connection di-release
-            evict: 15000,    // 15 detik eviction timeout
+            max: 2,
+            min: 0,
+            acquire: 30000,
+            idle: 10000,
+            evict: 15000,
             handleDisconnects: true
         },
         logging: isDev ? console.log : false,
-        // Tambahan options untuk serverless
         retry: {
             match: [
                 /ConnectionError/,
